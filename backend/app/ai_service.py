@@ -2,8 +2,8 @@ from typing import Optional
 from google import genai
 from .config import GEMINI_API_KEY
 
-# safer fallback model
-DEFAULT_MODEL = "gemini-1.5-flash-latest"
+# Pick one of the models from your list
+DEFAULT_MODEL = "models/gemini-2.5-flash"
 
 class GeminiClient:
     def __init__(self, api_key: Optional[str] = GEMINI_API_KEY, model: str = DEFAULT_MODEL):
@@ -18,4 +18,5 @@ class GeminiClient:
             contents=prompt,
         )
         return getattr(resp, "text", "").strip()
+
 

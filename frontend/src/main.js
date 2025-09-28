@@ -1,13 +1,17 @@
-
 import { createApp } from 'vue'
 import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import Home from './pages/Home.vue'
 import Ping from './pages/Ping.vue'
+import Login from './pages/Login.vue'
+import Register from './pages/Register.vue'
+import { getToken } from './lib/auth'
 
 const routes = [
   { path: '/', component: Home },
-  { path: '/ping', component: Ping }
+  { path: '/login', component: Login },
+  { path: '/register', component: Register },
+  { path: '/ping', component: Ping, meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({
@@ -15,4 +19,11 @@ const router = createRouter({
   routes
 })
 
+router.beforeEach((to) => {
+  if (to.meta.requiresAuth && !getToken()) {
+    return '/login'
+  }
+})
+
 createApp(App).use(router).mount('#app')
+

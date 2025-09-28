@@ -20,12 +20,12 @@
 <script setup>
 import axios from 'axios'
 import { ref } from 'vue'
+import { authHeader } from '../lib/auth'
 
 const prompt = ref('Say hello in a friendly way.')
 const reply = ref('')
 const error = ref('')
 const loading = ref(false)
-
 const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
 const sendPrompt = async () => {
@@ -33,7 +33,7 @@ const sendPrompt = async () => {
   error.value = ''
   reply.value = ''
   try {
-    const { data } = await axios.post(`${apiBase}/ai/ping`, { prompt: prompt.value })
+    const { data } = await axios.post(`${apiBase}/ai/ping`, { prompt: prompt.value }, { headers: { ...authHeader() } })
     reply.value = data.reply
   } catch (e) {
     error.value = e?.response?.data?.detail || e.message
@@ -42,3 +42,4 @@ const sendPrompt = async () => {
   }
 }
 </script>
+
