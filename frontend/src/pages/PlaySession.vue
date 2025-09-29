@@ -63,6 +63,9 @@
   import { ref, onMounted, computed } from 'vue'
   import { useRoute } from 'vue-router'
   import { api, asError } from '../lib/api'
+  import { watch } from 'vue'
+  import { useToast } from "vue-toastification"
+
   
   const route = useRoute()
   const sessionId = Number(route.params.sessionId)
@@ -74,6 +77,7 @@
   const loading = ref(true)
   const error = ref('')
   const lastAttempt = ref(null)
+  const toast = useToast()
   
   const currentQuestion = computed(() => questions.value.find(q => q.id === currentQuestionId.value))
   
@@ -97,20 +101,22 @@
   }
   
   async function submitAnswer() {
-    busy.value = true; error.value = ''
-    try {
-      const { data } = await api.post('/interview/answer', {
-        session_id: sessionId,
-        question_id: currentQuestionId.value,
-        answer: answer.value
-      })
-      lastAttempt.value = parseAttempt(data)
-    } catch (e) {
-      error.value = asError(e)
-    } finally {
-      busy.value = false
-    }
+  busy.value = true; error.value = ''
+  try {
+    const { data } = await api.post('/interview/answer', {
+      session_id: sessionId,
+      question_id: currentQuestionId.value,
+      answer: answer.value
+    })
+    lastAttempt.value = parseAttempt(data)
+    toast.success("Answer evaluated ✅")
+  } catch (e) {
+    error.value = asError(e)
+    toast.error(error.value)
+  } finally {
+    busy.value = false
   }
+}
   
   onMounted(async () => {
     try {
@@ -128,6 +134,25 @@
       loading.value = false
     }
   })
+  watch(currentQuestionId, (id) => {
+  if (id) localStorage.setItem(`session-${sessionId}-currentQ`, String(id))
+})
+
+onMounted(async () => {
+  try {
+    // ...load qs...
+    const saved = localStorage.getItem(`session-${sessionId}-currentQ`)
+    if (saved && qs.find(q => q.id === Number(saved))) {
+      currentQuestionId.value = Number(saved)
+    } else if (qs.length) {
+      currentQuestionId.value = qs[0].id
+    }
+  } catch (e) {
+    error.value = asError(e)
+  } finally {
+    loading.value = false
+  }
+})
   </script>
   
   <style scoped>

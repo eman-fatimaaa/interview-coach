@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from .config import APP_NAME
-from .routers import health, ai, auth, scenarios, interview
+from .routers import health, ai, auth, interview, admin, scenarios 
 from .database import init_db
 from .deps import get_current_user
 from .models import User
@@ -30,6 +30,7 @@ app.include_router(auth.router)
 app.include_router(scenarios.router)
 app.include_router(interview.router)
 app.include_router(ai.router)
+app.include_router(admin.router) 
 
 @app.get("/")
 def root():
