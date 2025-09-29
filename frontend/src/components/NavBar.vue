@@ -1,9 +1,9 @@
-
 <template>
   <header style="border-bottom:1px solid #eaeaea;padding:1rem;">
     <nav style="display:flex;align-items:center;gap:1rem;">
       <h1 style="margin:0;">AI Interview Coach</h1>
       <router-link to="/">Home</router-link>
+      <router-link to="/interview">Interview</router-link>
       <router-link to="/ping">Gemini Ping</router-link>
       <span style="flex:1"></span>
       <template v-if="token">
