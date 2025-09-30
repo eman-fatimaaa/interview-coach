@@ -1,151 +1,86 @@
 <template>
-    <section style="max-width:900px;margin:2rem auto">
-      <h2>Interview Session #{{ sessionId }}</h2>
-  
-      <div v-if="loading">Loading…</div>
-      <p v-if="error" style="color:red">{{ error }}</p>
-  
-      <div v-if="questions.length">
-        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:.5rem 0 1rem 0">
-          <button
-            v-for="q in questions" :key="q.id"
-            :class="['tab', {active: q.id === currentQuestionId}]"
-            @click="selectQuestion(q.id)"
-          >
-            Q{{ q.id }}
+  <section class="max-w-3xl mx-auto p-6">
+    <h2 class="text-xl font-bold mb-4">
+      Interview Session #{{ sessionId }}
+    </h2>
+
+    <!-- Show loading / error -->
+    <p v-if="loading">Loading questions...</p>
+    <p v-if="error" class="text-red-500">{{ error }}</p>
+
+    <!-- Show when questions are loaded -->
+    <div v-if="questions.length > 0">
+      <div class="flex gap-2 mb-4">
+        <button
+          v-for="q in questions"
+          :key="q.id"
+          @click="currentQuestion = q"
+          class="px-3 py-1 rounded border hover:bg-gray-100"
+        >
+          Q{{ q.id }}
+        </button>
+      </div>
+
+      <div v-if="currentQuestion">
+        <h3 class="font-semibold mb-2">
+          Question #{{ currentQuestion.id }}
+        </h3>
+        <p class="mb-4">{{ currentQuestion.text }}</p>
+
+        <textarea
+          v-model="answer"
+          placeholder="Your answer"
+          class="w-full p-3 border rounded mb-4"
+          rows="5"
+        />
+
+        <div class="flex gap-2">
+          <button @click="submitAnswer" class="bg-indigo-600 text-white px-4 py-2 rounded">
+            Submit
+          </button>
+          <button @click="answer = ''" class="border px-4 py-2 rounded">
+            Clear
           </button>
         </div>
-  
-        <article v-if="currentQuestion" style="border:1px solid #eee;border-radius:12px;padding:1rem">
-          <h3>Question #{{ currentQuestion.id }}</h3>
-          <p style="margin:.5rem 0 1rem 0">{{ currentQuestion.text }}</p>
-  
-          <label>Your answer</label>
-          <textarea v-model="answer" rows="6" style="width:100%;margin:.25rem 0 1rem 0"></textarea>
-  
-          <div style="display:flex;gap:.5rem;align-items:center">
-            <button :disabled="busy || answer.trim().length<2" @click="submitAnswer">
-              {{ busy ? 'Submitting…' : 'Submit' }}
-            </button>
-            <button @click="clear" :disabled="busy">Clear</button>
-          </div>
-  
-          <div v-if="lastAttempt" style="margin-top:1rem;padding:.75rem;border-radius:10px;background:#fafafa;border:1px solid #eee">
-            <h4 style="margin:.25rem 0 .5rem 0">AI Feedback</h4>
-            <div v-if="lastAttempt.parsed">
-              <p style="white-space:pre-wrap">{{ lastAttempt.parsed.feedback }}</p>
-              <p style="margin-top:.5rem"><b>Overall:</b> {{ lastAttempt.parsed.overall_score }}</p>
-              <p>
-                <b>Rubric:</b>
-                Relevance {{ lastAttempt.parsed.rubric?.relevance ?? '—' }} •
-                STAR {{ lastAttempt.parsed.rubric?.star_structure ?? '—' }} •
-                Tech {{ lastAttempt.parsed.rubric?.technical_depth ?? '—' }} •
-                Comm {{ lastAttempt.parsed.rubric?.communication ?? '—' }}
-              </p>
-            </div>
-            <div v-else>
-              <p style="white-space:pre-wrap">{{ lastAttempt.ai_feedback }}</p>
-              <p><b>Overall:</b> {{ lastAttempt.score ?? '—' }}</p>
-            </div>
-          </div>
-        </article>
-  
-        <div style="margin-top:1.25rem;display:flex;gap:.5rem">
-          <router-link :to="`/interview/session/${sessionId}/summary`">
-            <button>View Session Summary</button>
-          </router-link>
-        </div>
       </div>
-    </section>
-  </template>
-  
-  <script setup>
-  import { ref, onMounted, computed } from 'vue'
-  import { useRoute } from 'vue-router'
-  import { api, asError } from '../lib/api'
-  import { watch } from 'vue'
-  import { useToast } from "vue-toastification"
+    </div>
 
-  
-  const route = useRoute()
-  const sessionId = Number(route.params.sessionId)
-  
-  const questions = ref([])
-  const currentQuestionId = ref(null)
-  const answer = ref('')
-  const busy = ref(false)
-  const loading = ref(true)
-  const error = ref('')
-  const lastAttempt = ref(null)
-  const toast = useToast()
-  
-  const currentQuestion = computed(() => questions.value.find(q => q.id === currentQuestionId.value))
-  
-  function selectQuestion(id) {
-    currentQuestionId.value = id
-    answer.value = ''
-    lastAttempt.value = null
-  }
-  
-  function parseAttempt(attempt) {
-    try {
-      const parsed = JSON.parse(attempt.ai_feedback)
-      return { ...attempt, parsed }
-    } catch {
-      return attempt
-    }
-  }
-  
-  function clear() {
-    answer.value = ''
-  }
-  
-  async function submitAnswer() {
-  busy.value = true; error.value = ''
-  try {
-    const { data } = await api.post('/interview/answer', {
-      session_id: sessionId,
-      question_id: currentQuestionId.value,
-      answer: answer.value
-    })
-    lastAttempt.value = parseAttempt(data)
-    toast.success("Answer evaluated ✅")
-  } catch (e) {
-    error.value = asError(e)
-    toast.error(error.value)
-  } finally {
-    busy.value = false
-  }
-}
-  
-  onMounted(async () => {
-    try {
-      // load session to know scenario id
-      const { data: sessions } = await api.get('/interview/sessions/me')
-      const sess = sessions.find(s => s.id === sessionId)
-      if (!sess) { error.value = 'Session not found'; return }
-  
-      const { data: qs } = await api.get(`/scenarios/${sess.scenario_id}/questions`)
-      questions.value = qs
-      if (qs.length) currentQuestionId.value = qs[0].id
-    } catch (e) {
-      error.value = asError(e)
-    } finally {
-      loading.value = false
-    }
-  })
-  watch(currentQuestionId, (id) => {
-  if (id) localStorage.setItem(`session-${sessionId}-currentQ`, String(id))
-})
+    <!-- No questions -->
+    <p v-else-if="!loading && !error" class="text-gray-500">
+      No questions found for this session.
+    </p>
+
+    <router-link
+      v-if="!loading && questions.length > 0"
+      :to="`/interview/session/${sessionId}/summary`"
+      class="inline-block mt-6 text-indigo-600 hover:underline"
+    >
+      View Session Summary
+    </router-link>
+  </section>
+</template>
+
+<script setup>
+import { ref, onMounted } from "vue"
+import { useRoute } from "vue-router"
+import { api, asError } from "../lib/api"
+
+const route = useRoute()
+const sessionId = Number(route.params.sessionId)
+
+const questions = ref([])       // ✅ always initialize as empty array
+const currentQuestion = ref(null)
+const answer = ref("")
+const loading = ref(true)
+const error = ref("")
 
 onMounted(async () => {
   try {
-    // ...load qs...
-    const saved = localStorage.getItem(`session-${sessionId}-currentQ`)
-    if (saved && qs.find(q => q.id === Number(saved))) {
-      currentQuestionId.value = Number(saved)
-    } else if (qs.length) {
-      currentQuestionId.value = qs[0].id
+    const { data } = await api.get(`/interview/sessions/${sessionId}/details`)
+    // adjust depending on backend response structure
+    questions.value = data.questions || []
+    if (questions.value.length > 0) {
+      currentQuestion.value = questions.value[0]
     }
   } catch (e) {
     error.value = asError(e)
@@ -153,10 +88,18 @@ onMounted(async () => {
     loading.value = false
   }
 })
-  </script>
-  
-  <style scoped>
-  .tab { padding:.35rem .6rem; border:1px solid #ddd; background:#fff; border-radius:8px; cursor:pointer }
-  .tab.active { background:#f3f6ff; border-color:#b7c3ff }
-  </style>
-  
+
+async function submitAnswer() {
+  if (!currentQuestion.value) return
+  try {
+    await api.post("/interview/answer", {
+      session_id: sessionId,
+      question_id: currentQuestion.value.id,
+      answer: answer.value
+    })
+    alert("Answer submitted ✅")
+  } catch (e) {
+    error.value = asError(e)
+  }
+}
+</script>

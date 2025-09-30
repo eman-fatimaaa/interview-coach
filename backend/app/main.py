@@ -10,7 +10,7 @@ app = FastAPI(title=APP_NAME)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # lock down later
+    allow_origins=["*"],  
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -20,7 +20,7 @@ app.add_middleware(
 def on_startup():
     init_db()
 
-# Bind /auth/me here (avoid circulars)
+
 @auth.router.get("/me", response_model=dict)
 def me(user: User = Depends(get_current_user)):
     return {"id": user.id, "name": user.name, "email": user.email, "role": user.role}

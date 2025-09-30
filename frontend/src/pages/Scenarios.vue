@@ -1,24 +1,29 @@
+<!-- src/pages/Scenarios.vue -->
 <template>
-    <section style="max-width:900px;margin:2rem auto">
-      <h2>Interview Scenarios</h2>
-      <p v-if="loading">Loading scenarios…</p>
-      <p v-if="error" style="color:red">{{ error }}</p>
-      <div v-if="scenarios.length" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:1rem">
-        <article v-for="s in scenarios" :key="s.id" style="border:1px solid #eee;border-radius:12px;padding:1rem">
-          <h3 style="margin:.25rem 0">{{ s.title }}</h3>
-          <div style="font-size:.9rem;color:#666">{{ s.role }} • {{ s.level }}</div>
-          <p style="margin:.5rem 0 1rem 0">{{ s.description }}</p>
-          <router-link :to="`/interview/${s.id}/start`">
-            <button>Start</button>
+    <section class="max-w-6xl mx-auto px-4 py-10">
+      <h1 class="text-2xl font-bold mb-6">Choose a Scenario</h1>
+  
+      <div v-if="loading" class="text-gray-500">Loading…</div>
+      <div v-else-if="error" class="text-red-600">{{ error }}</div>
+  
+      <div v-else class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div v-for="s in scenarios" :key="s.id" class="bg-white rounded-xl shadow p-5 flex flex-col">
+          <h3 class="font-semibold">{{ s.title }}</h3>
+          <p class="text-sm text-gray-500 mt-1">{{ s.role }} • {{ s.level }}</p>
+          <p class="text-sm text-gray-600 mt-3 line-clamp-3">{{ s.description }}</p>
+          <router-link :to="`/interview/${s.id}/start`"
+                       class="mt-4 px-3 py-2 bg-indigo-600 text-white rounded-md text-center">
+            Start
           </router-link>
-        </article>
+        </div>
       </div>
     </section>
   </template>
   
   <script setup>
   import { ref, onMounted } from 'vue'
-  import { api, asError } from '../lib/api'
+  import { api } from '../lib/api'
+  import { getToken } from '../lib/auth'
   
   const scenarios = ref([])
   const loading = ref(true)
@@ -26,10 +31,12 @@
   
   onMounted(async () => {
     try {
+      // api instance already attaches token, but keep a hard auth check here:
+      if (!getToken()) throw new Error('Not authenticated')
       const { data } = await api.get('/scenarios')
-      scenarios.value = data
+      scenarios.value = data || []
     } catch (e) {
-      error.value = asError(e)
+      error.value = e?.response?.data?.detail || e.message
     } finally {
       loading.value = false
     }

@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:15
+    container_name: interview_db
+    restart: always
+    environment:
+      POSTGRES_USER: coach
+      POSTGRES_PASSWORD: coachpass
+      POSTGRES_DB: coachdb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "55432:5432"   # external port is 55432 (safe), inside Docker still db:5432
+
+  backend:
+    build: ./backend
+    container_name: interview_backend
+    restart: always
+    env_file:
+      - .env   # 👈 load all keys from your .env file
+    environment:
+      DATABASE_URL: postgresql+psycopg2://coach:coachpass@db:5432/coachdb
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: interview_frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE_URL: "http://localhost:8000"
+    ports:
+      - "5173:80"
+
+volumes:
+  db_data:

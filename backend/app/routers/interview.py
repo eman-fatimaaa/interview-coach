@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from sqlmodel import Session, select
 from datetime import datetime
+import json
 
 from ..database import get_session
 from ..deps import get_current_user
@@ -23,6 +24,7 @@ class SessionOut(BaseModel):
     status: str
     started_at: datetime
     ended_at: Optional[datetime]
+
     class Config:
         from_attributes = True
 
@@ -40,7 +42,8 @@ class AttemptOut(BaseModel):
     ai_feedback: Optional[str]
     score: Optional[float]
     created_at: datetime
-    rubric: Optional[Dict[str, float]] = None  # extracted from ai_feedback JSON if present
+    rubric: Optional[Dict[str, float]] = None
+
     class Config:
         from_attributes = True
 
@@ -55,7 +58,6 @@ class SessionSummaryOut(BaseModel):
 
 # --------- Helpers ---------
 def _extract_rubric(attempt: Attempt) -> Optional[Dict[str, float]]:
-    import json
     try:
         data = json.loads(attempt.ai_feedback or "")
         rub = data.get("rubric")
@@ -68,7 +70,11 @@ def _extract_rubric(attempt: Attempt) -> Optional[Dict[str, float]]:
 
 # --------- Endpoints ---------
 @router.post("/sessions/start", response_model=SessionOut)
-def start_session(body: StartSessionIn, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def start_session(
+    body: StartSessionIn,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
     scenario = session.get(InterviewScenario, body.scenario_id)
     if not scenario:
         raise HTTPException(404, "Scenario not found")
@@ -79,12 +85,22 @@ def start_session(body: StartSessionIn, session: Session = Depends(get_session),
     return sess
 
 @router.get("/sessions/me", response_model=List[SessionOut])
-def my_sessions(session: Session = Depends(get_session), user: User = Depends(get_current_user)):
-    rows = session.exec(select(InterviewSession).where(InterviewSession.user_id == user.id).order_by(InterviewSession.started_at.desc())).all()
-    return rows
+def my_sessions(
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    return session.exec(
+        select(InterviewSession)
+        .where(InterviewSession.user_id == user.id)
+        .order_by(InterviewSession.started_at.desc())
+    ).all()
 
 @router.post("/answer", response_model=AttemptOut)
-def submit_answer(body: AnswerIn, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def submit_answer(
+    body: AnswerIn,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
     # Rate limit (AI call)
     ensure_rate(user.id)
 
@@ -100,7 +116,7 @@ def submit_answer(body: AnswerIn, session: Session = Depends(get_session), user:
     if not q or q.scenario_id != sess.scenario_id:
         raise HTTPException(400, "Question does not belong to session's scenario")
 
-    # Create the attempt
+    # Create attempt
     attempt = Attempt(
         session_id=sess.id,
         user_id=user.id,
@@ -115,32 +131,36 @@ def submit_answer(body: AnswerIn, session: Session = Depends(get_session), user:
 
     # Evaluate with Gemini
     data = gc.evaluate_answer(q.text, body.answer.strip())
-    # Store JSON string in ai_feedback, overall in score
-    import json
     attempt.ai_feedback = json.dumps(data, ensure_ascii=False)
     attempt.score = float(data.get("overall_score", 3.0))
     session.add(attempt)
     session.commit()
     session.refresh(attempt)
 
-    return AttemptOut(
-        **attempt.model_dump(),
-        rubric=data.get("rubric"),
-    )
+    return AttemptOut(**attempt.model_dump(), rubric=data.get("rubric"))
 
 @router.get("/attempts/me", response_model=List[AttemptOut])
-def my_attempts(session_id: Optional[int] = None, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
-    stmt = select(Attempt).where(Attempt.user_id == user.id).order_by(Attempt.created_at.desc())
+def my_attempts(
+    session_id: Optional[int] = None,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    stmt = (
+        select(Attempt)
+        .where(Attempt.user_id == user.id)
+        .order_by(Attempt.created_at.desc())
+    )
     if session_id:
         stmt = stmt.where(Attempt.session_id == session_id)
     rows = session.exec(stmt).all()
-    out: List[AttemptOut] = []
-    for a in rows:
-        out.append(AttemptOut(**a.model_dump(), rubric=_extract_rubric(a)))
-    return out
+    return [AttemptOut(**a.model_dump(), rubric=_extract_rubric(a)) for a in rows]
 
 @router.post("/sessions/{session_id}/complete", response_model=SessionOut)
-def complete_session(session_id: int, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def complete_session(
+    session_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
     sess = session.get(InterviewSession, session_id)
     if not sess or sess.user_id != user.id:
         raise HTTPException(404, "Session not found")
@@ -152,16 +172,21 @@ def complete_session(session_id: int, session: Session = Depends(get_session), u
     return sess
 
 @router.get("/sessions/{session_id}/summary", response_model=SessionSummaryOut)
-def session_summary(session_id: int, session: Session = Depends(get_session), user: User = Depends(get_current_user)):
+def session_summary(
+    session_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
     sess = session.get(InterviewSession, session_id)
     if not sess or sess.user_id != user.id:
         raise HTTPException(404, "Session not found")
 
-    atts = session.exec(select(Attempt).where(Attempt.session_id == sess.id).order_by(Attempt.created_at.asc())).all()
+    atts = session.exec(
+        select(Attempt).where(Attempt.session_id == sess.id).order_by(Attempt.created_at.asc())
+    ).all()
     if not atts:
         raise HTTPException(400, "No attempts in this session")
 
-    # Build items for Gemini + compute averages
     items = []
     agg = {"relevance": 0.0, "star_structure": 0.0, "technical_depth": 0.0, "communication": 0.0}
     n = 0
@@ -180,16 +205,70 @@ def session_summary(session_id: int, session: Session = Depends(get_session), us
             n += 1
 
     avg = {k: (round(v / n, 2) if n else 0.0) for k, v in agg.items()}
-
-    # Call Gemini to write the summary text
     report = gc.summarize_session(items)
 
     return SessionSummaryOut(
-        session_id=sess.id,
-        started_at=sess.started_at,
-        ended_at=sess.ended_at,
-        average_scores=avg,
-        summary=report.get("summary", ""),
-        strengths=report.get("strengths", []),
-        improvements=report.get("improvements", []),
-    )
+    session_id=sess.id,
+    started_at=sess.started_at,
+    ended_at=sess.ended_at,
+    average_scores=avg,
+    summary=report.get("summary", ""),
+    strengths=report.get("strengths", []),
+    improvements=report.get("improvements", []),
+)
+
+
+# --------- NEW: Session details (with questions) ---------
+@router.get("/sessions/{session_id}/details")
+def session_details(
+    session_id: int,
+    db: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    sess = db.get(InterviewSession, session_id)
+    if not sess or sess.user_id != user.id:
+        raise HTTPException(404, "Session not found")
+
+    scenario = db.get(InterviewScenario, sess.scenario_id)
+    if not scenario:
+        raise HTTPException(404, "Scenario not found")
+
+    questions = db.exec(
+        select(Question).where(Question.scenario_id == scenario.id)
+    ).all()
+
+    return {
+        "session": {
+            "id": sess.id,
+            "scenario_id": sess.scenario_id,
+            "status": sess.status,
+            "started_at": sess.started_at,
+            "ended_at": sess.ended_at,
+        },
+        "questions": [
+            {"id": q.id, "text": q.text, "difficulty": q.difficulty}
+            for q in questions
+        ],
+    }
+
+
+# --------- NEW: Delete Session ---------
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_session(
+    session_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    sess = session.get(InterviewSession, session_id)
+    if not sess or sess.user_id != user.id:
+        raise HTTPException(404, "Session not found")
+
+    # Delete attempts first (foreign key constraint)
+    attempts = session.exec(select(Attempt).where(Attempt.session_id == sess.id)).all()
+    for a in attempts:
+        session.delete(a)
+
+    # Delete the session
+    session.delete(sess)
+    session.commit()
+    return None

@@ -1,45 +1,73 @@
-
 <template>
-  <section>
-    <h2>Gemini Ping</h2>
-    <p>Send a prompt to the backend, which calls Gemini and returns a reply.</p>
-    <form @submit.prevent="sendPrompt" style="margin-top:1rem">
-      <textarea v-model="prompt" rows="4" style="width:100%" placeholder="Type a prompt..."></textarea>
-      <button :disabled="loading" style="margin-top:0.5rem; padding:0.5rem 1rem;">{{ loading ? 'Sending...' : 'Send' }}</button>
-    </form>
-    <div v-if="error" style="margin-top:1rem; color:red">
-      <strong>Error:</strong> {{ error }}
-    </div>
-    <div v-if="reply" style="margin-top:1rem; white-space:pre-wrap;">
-      <strong>Reply:</strong>
-      <p>{{ reply }}</p>
+  <section class="max-w-2xl mx-auto py-16 px-6">
+    <div class="bg-white shadow-lg rounded-lg p-8 border border-gray-100">
+      <h2 class="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2">
+        🤖 Gemini Ping
+      </h2>
+      <p class="text-gray-500 mb-6">
+        Send a prompt to the backend, which calls Gemini and returns a reply.
+      </p>
+
+      <!-- Input box -->
+      <textarea
+        v-model="prompt"
+        placeholder="Type your message..."
+        rows="4"
+        class="w-full border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+      ></textarea>
+
+      <!-- Buttons -->
+      <div class="flex justify-end gap-3 mt-4">
+        <button
+          @click="sendPing"
+          :disabled="loading"
+          class="bg-indigo-600 text-white px-6 py-2 rounded-lg hover:bg-indigo-700 transition disabled:opacity-50"
+        >
+          {{ loading ? "Sending..." : "Send" }}
+        </button>
+        <button
+          @click="prompt = ''; reply = ''"
+          class="border px-6 py-2 rounded-lg hover:bg-gray-100"
+        >
+          Clear
+        </button>
+      </div>
+
+      <!-- Reply -->
+      <div v-if="reply" class="mt-6 bg-gray-50 border rounded-lg p-4">
+        <h3 class="font-semibold text-gray-700 mb-2">Gemini’s Reply:</h3>
+        <p class="text-gray-800 whitespace-pre-wrap">{{ reply }}</p>
+      </div>
+
+      <!-- Error -->
+      <p v-if="error" class="mt-4 text-red-500 font-medium">
+        {{ error }}
+      </p>
     </div>
   </section>
 </template>
 
 <script setup>
-import axios from 'axios'
-import { ref } from 'vue'
-import { authHeader } from '../lib/auth'
+import { ref } from "vue"
+import { api, asError } from "../lib/api"
 
-const prompt = ref('Say hello in a friendly way.')
-const reply = ref('')
-const error = ref('')
+const prompt = ref("Say hello in a friendly way.")
+const reply = ref("")
+const error = ref("")
 const loading = ref(false)
-const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
-const sendPrompt = async () => {
+async function sendPing() {
   loading.value = true
-  error.value = ''
-  reply.value = ''
+  error.value = ""
+  reply.value = ""
+
   try {
-    const { data } = await axios.post(`${apiBase}/ai/ping`, { prompt: prompt.value }, { headers: { ...authHeader() } })
-    reply.value = data.reply
+    const { data } = await api.post("/ai/ping", { prompt: prompt.value })
+    reply.value = data.reply || "No response"
   } catch (e) {
-    error.value = e?.response?.data?.detail || e.message
+    error.value = asError(e)
   } finally {
     loading.value = false
   }
 }
 </script>
-

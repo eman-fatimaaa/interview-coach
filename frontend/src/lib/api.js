@@ -1,18 +1,21 @@
 import axios from "axios";
-import { getToken } from "./auth";
-
-const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export const api = axios.create({
-  baseURL: apiBase,
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
+// Automatically attach token if available
 api.interceptors.request.use((config) => {
-  const t = getToken();
-  if (t) config.headers.Authorization = `Bearer ${t}`;
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 
 export function asError(e) {
-  return e?.response?.data?.detail || e?.message || "Unknown error";
+  return e?.response?.data?.detail || e.message
 }

@@ -16,15 +16,31 @@ def get_password_hash(password: str) -> str:
 def verify_password(password: str, password_hash: str) -> bool:
     return pwd_context.verify(password, password_hash)
 
-def create_access_token(data: Dict, expires_delta: Optional[timedelta] = None) -> str:
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-    to_encode.update({"exp": expire})
-    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return token
+# def create_access_token(data: Dict, expires_delta: Optional[timedelta] = None) -> str:
+#     to_encode = data.copy()
+#     expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+#     to_encode.update({"exp": expire})
+#     token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+#     return token
 
 def decode_token(token: str) -> Optional[Dict]:
     try:
         return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     except JWTError:
         return None
+    
+def create_access_token(data: Dict, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = data.copy()
+
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+
+    # Ensure user id (sub) and email are always included
+    if "sub" not in to_encode and "id" in data:
+        to_encode["sub"] = str(data["id"])
+    if "email" not in to_encode and "email" in data:
+        to_encode["email"] = data["email"]
+
+    token = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return token
+

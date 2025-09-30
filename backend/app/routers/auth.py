@@ -56,7 +56,8 @@ def login(req: LoginRequest, session: Session = Depends(get_session)):
         raise HTTPException(status_code=401, detail="Invalid email or password")
 
     token = create_access_token({"sub": user.email, "role": user.role})
-    return TokenResponse(access_token=token)
+    return TokenResponse(access_token = create_access_token({"id": user.id, "email": user.email, "role": user.role})
+)
 
 # @router.get("/me", response_model=MeResponse)
 # def me(user: User = Depends(...)):  # will be patched below to avoid circular import
